@@ -118,7 +118,7 @@ class DataReader(object):
         if len(batch) > 0:
             yield finish(batch)
 
-    def batcher_not_using(self, batch_data, is_training=False):
+    def batcher_only_alpha(self, batch_data, is_training=False):
         if is_training: random.shuffle(batch_data)
 
         def finish(batch):
@@ -136,6 +136,8 @@ class DataReader(object):
         max_seq_len = 0
         for l in batch_data:
             for ix, w in enumerate(l):
+                # if a word from raw data start with alphabetic char, add it to batched data; else, don't add
+                # train and test MRR with this batch will give a lower MRR score; on a 3 epoch traning with K=3 test_sequence_size=100
                 if not w[:1].isalpha():
                     continue
                 seq.append(self.w2i[w if w in self.w2i else "<unk>"])

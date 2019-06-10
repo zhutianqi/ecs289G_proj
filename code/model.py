@@ -47,352 +47,6 @@ class WordModel(tf.keras.Model):
         return preds
 
 
-def generate_K_indices(preds, input_masks, data, K, input_logits):
-    listA = preds.shape.as_list()
-    indices_result = np.zeros((listA[0] * K, listA[1]))
-    logits = np.zeros(K)
-    probability = np.zeros(K)
-    for i in range((listA[0])):
-        index_to_expand = tf.reduce_sum(input_masks[i, :])
-        print("index_to_expand = ")
-        print(index_to_expand)
-        for j in range(index_to_expand - 1):
-            print("j =")
-            print(j)
-            (values, topK_logits_index) = tf.math.top_k(preds[i, j, :], 1)
-            print(preds[i, j, :])
-            print(topK_logits_index)
-            for k in range(K):
-                indices_result[i + k * listA[0], j] = topK_logits_index[0] + 1
-        for j in range(index_to_expand - 1, index_to_expand):
-            print("j =")
-            print(j)
-            (values, topK_logits_index) = tf.math.top_k(preds[i, j, :], K)
-            logits = values + input_logits
-            print("logits:")
-            print(logits)
-            print(preds[i, j, :])
-            print(topK_logits_index)
-            for k in range(K):
-                indices_result[i + k * listA[0], j] = topK_logits_index[k] + 1
-    for i in range(k):
-        probability[i] = logit_to_probability(logits[i])
-    return tf.constant(indices_result, dtype="int32"), tf.constant(logits, dtype="float32")
-
-
-def index_to_word(index, data):
-    word = data.i2w[index.numpy()]
-    return word
-
-
-def indices_to_word(indices, data):
-    words = []
-    for index in indices:
-        words.append(data.i2w[index.numpy()])
-    print("!!!!!!!!!!!Print word given indices!!!!!!!!!!")
-    print(words)
-    return words
-
-
-def indices_to_word2(indices, data):
-    words = []
-    for index in indices:
-        words.append(data.i2w[index])
-    print("!!!!!!!!!!!Print word given indices!!!!!!!!!!")
-    print(words)
-    return words
-
-
-def logit_to_probability(logit):
-    odds = math.exp(logit)
-    probability = odds / (1 + odds)
-    return probability
-
-
-def generate_K_indices_pq(preds, input_masks, data, K):
-    listA = preds.shape.as_list()
-    indices_result = np.zeros((listA[0] * K, listA[1]))
-    logits = np.zeros(K)
-    probabilities = np.zeros(K)
-    index_to_expand = tf.reduce_sum(input_masks[0, :])
-    for i in range((listA[0])):
-        # for j in range(index_to_expand - 1):
-        #     (values, topK_logits_index) = tf.math.top_k(preds[i, j, :], 1)
-        #     for k in range(K):
-        #         indices_result[i + k * listA[0], j] = topK_logits_index[0] + 1
-        for j in range(index_to_expand - 1, index_to_expand):
-            prediction = tf.nn.softmax(preds[i, j, :])
-            (logits, topK_logits_index) = tf.math.top_k(preds[i, j, :], K)
-            for k in range(K):
-                # do we need to add 1? ie how to deal with index 0
-                indices_result[i + k * listA[0], j] = topK_logits_index[k]
-                probabilities[k] = prediction[topK_logits_index[k]]
-    # print("probabilities:")
-    # print(probabilities)
-    return tf.constant(indices_result, dtype="int32"), logits, probabilities, index_to_expand
-
-
-def beam_search_pq(model, data, input_indices_tf, mask_tf, K):
-    min_heap_result = Q.PriorityQueue()
-    max_heap_candidate = Q.PriorityQueue()
-    # dummy
-    min_heap_result.put((0.00001, input_indices_tf, mask_tf))
-    #unique count
-    count = 0
-
-    # initialize the max_heap_candidate
-    index_tf = input_indices_tf[:-1]
-    expand_index_tf = tf.expand_dims(index_tf, 0)
-    expand_mask_tf = tf.expand_dims(mask_tf, 0)
-    preds = model(expand_index_tf)
-    (k_indices_tf, logits, probabilities, index_to_expand) = generate_K_indices_pq(preds, expand_mask_tf, data, K)
-    # print("!!!!!!!!!!")
-    # print(logits)
-    # prediction = tf.nn.softmax(logits)
-    # print(prediction)
-    # print(probabilities)
-    # print("!!!!!!!!!!")
-    for i in range(K):
-        new_index_tf = tf.Variable(input_indices_tf)
-        new_index_tf = new_index_tf[int(index_to_expand.numpy())].assign(
-            k_indices_tf[i, int(index_to_expand.numpy() - 1)])
-        new_mask_tf = tf.Variable(mask_tf)
-        new_mask_tf = new_mask_tf[int(index_to_expand.numpy())].assign(tf.constant(1.0, dtype="float32"))
-        # print(input_indices_tf)
-        # print(mask_tf)
-        # print(new_index_tf)
-        # print(new_mask_tf)
-        # if (probabilities[i] > 0.0001):
-        count = count + 1
-        max_heap_candidate.put((-probabilities[i], count, (index_to_expand, new_index_tf, new_mask_tf)))
-        # max_heap_candidate.put((-logits[i], index_to_expand, new_index_tf, new_mask_tf))
-
-    while not max_heap_candidate.empty():
-        max_heap_candidate_top = max_heap_candidate.get()
-        # print(max_heap_candidate_top)
-        # print(max_heap_candidate_top)
-        probability = -max_heap_candidate_top[0]
-        # logit = -max_heap_candidate_top[0]
-        indices = max_heap_candidate_top[2][1]
-        mask = max_heap_candidate_top[2][2]
-        index_to_expand = max_heap_candidate_top[2][0]
-
-        suffix = "#"
-        # print(index_to_word(indices[int(index_to_expand.numpy())], data))
-        if (index_to_word(indices[int(index_to_expand.numpy())], data)).endswith(suffix):
-            list = indices.shape.as_list()
-            if int(index_to_expand.numpy()) == list[0] - 1:
-                # print("Reach end")
-                # min_heap_result.put((logit, indices, mask))
-                min_heap_result.put((probability, indices, mask))
-                if min_heap_result.qsize() > K:
-                    min_heap_result.get()
-            else:
-                min_heap_result_top = min_heap_result.get()
-                min_heap_result.put(min_heap_result_top)
-                if min_heap_result_top[0] < probability:
-                    index_tf = indices[:-1]
-                    mask_tf = mask
-                    expand_index_tf = tf.expand_dims(index_tf, 0)
-                    expand_mask_tf = tf.expand_dims(mask_tf, 0)
-                    preds = model(expand_index_tf)
-                    (k_indices_tf, logits, probabilities, index_to_expand) = generate_K_indices_pq(preds,
-                                                                                                   expand_mask_tf,
-                                                                                                   data, K)
-                    for i in range(K):
-                        new_index_tf = tf.Variable(indices)
-                        new_index_tf = new_index_tf[int(index_to_expand.numpy())].assign(
-                            k_indices_tf[i, int(index_to_expand.numpy() - 1)])
-                        new_mask_tf = tf.Variable(mask_tf)
-                        new_mask_tf = new_mask_tf[int(index_to_expand.numpy())].assign(
-                            tf.constant(1.0, dtype="float32"))
-                        # print(input_indices_tf)
-                        # print(mask_tf)
-                        # print(new_index_tf)
-                        # print(new_mask_tf)
-                        count = count + 1
-                        max_heap_candidate.put(
-                            (-(probability * probabilities[i]), count, (index_to_expand, new_index_tf, new_mask_tf)))
-                else:
-                    break
-        else:
-            min_heap_result.put((probability, indices, mask))
-            # print("We got one!!!!!")
-            if min_heap_result.qsize() > K:
-                min_heap_result.get()
-    return min_heap_result
-
-
-def beam_search(model, data, index_tf, mask_tf, K, input_logits, depth):
-    result_indices = []
-    result_logits = []
-
-    if depth <= K:
-        expand_index_tf = tf.expand_dims(index_tf, 0)
-        expand_mask_tf = tf.expand_dims(mask_tf, 0)
-        preds = model(expand_index_tf)
-        # , k_indices_np, k_logits_np
-        (k_indices, k_logits) = generate_K_indices(preds, expand_mask_tf, data, K, input_logits)
-        index_to_expand = tf.reduce_sum(mask_tf) - 1
-        for i in range(K):
-            indices = k_indices[i]
-            logits = k_logits[i]
-            last_word_index = indices[int(index_to_expand.numpy())]
-            last_word = data.i2w[last_word_index.numpy()]
-            print(last_word)
-            suffix = "#"
-            if last_word.endswith(suffix) and depth < K:
-                print("#####")
-                new_index_tf = tf.Variable(index_tf)
-                print("The new index:")
-                print(new_index_tf)
-                print(int(index_to_expand.numpy()) + 1)
-
-                new_index_tf = new_index_tf[int(index_to_expand.numpy()) + 1].assign(last_word_index)
-                new_mask_tf = tf.Variable(mask_tf)
-                new_mask_tf = new_mask_tf[int(index_to_expand.numpy()) + 1].assign(tf.constant(1.0, dtype="float32"))
-
-                (r_indices, r_logits) = beam_search(model, data, new_index_tf, new_mask_tf, K, logits, depth + 1)
-                result_indices.extend(r_indices)
-                result_logits.extend(r_logits)
-            else:
-                print("!!!!!")
-                print(K)
-                new_index_tf = tf.Variable(index_tf)
-                new_index_tf = new_index_tf[int(index_to_expand.numpy()) + 1].assign(last_word_index)
-                result_indices.append(new_index_tf)
-                result_logits.append(logits)
-                # if i is Ending or i size is ending:
-                #     result_indices.add(i,logits)
-                # else:
-                #     beam_search(model, i, shifted_mask, K, result_indices)
-    if depth == 0:
-        for i in range(len(result_logits)):
-            print("Print beam search result:")
-            print(result_indices[i])
-            indices_to_word2(result_indices[i].numpy(), data)
-            print("Print beam search logits result:")
-            print(result_logits[i])
-        print(len(result_logits))
-    return result_indices, result_logits
-
-
-def generate_indices_masks(data, size):
-    masks_result = []
-    indices_result = []
-    # print("SHAPE")
-    # print(np.shape(data.valid_data))
-    # print("SHAPE")
-    random.Random(1032).shuffle(data.valid_data)
-    # save not shuffle, need a manual seed
-    for indices, masks in data.batcher(data.valid_data, is_training=False):
-        indices_result.extend(indices[:size, :])
-        masks_result.extend(masks[:size, :])
-        break
-    return indices_result, masks_result
-
-
-def process_data(data, indices, mask):
-    indices_result = []
-    masks_result = []
-    cur_indices = []
-    cur_mask = []
-    j = 0
-    for i in range(201):
-        if mask[i].numpy() == 0:
-            break
-        cur_indices.append(int(indices[i].numpy()))
-        cur_mask.append(float(mask[i].numpy()))
-
-        if not data.i2w[int(indices[i].numpy())].endswith("#"):
-            indices_result.append(cur_indices.copy())
-            # print(cur_indices.copy())
-            masks_result.append(cur_mask.copy())
-
-    # print(indices_result)
-    return indices_result, masks_result
-
-
-def get_score(pq, input_indices_tf_next, input_mask_tf_next, K, data):
-    base = K + 1
-    while not pq.empty():
-        base = base - 1
-        [probability, indices, masks] = pq.get()
-        # print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        # print(indices)
-        # indices_to_word2(indices.numpy(),data)
-        # print(input_indices_tf_next)
-        # indices_to_word(input_indices_tf_next,data)
-        listA = input_indices_tf_next.shape.as_list()
-        same = True
-        # print(indices)
-        # print(input_indices_tf_next)
-        for i in range(listA[0]):
-            # print(int(indices[i].numpy()))
-            # print(int(input_indices_tf_next[i].numpy()))
-            if not int(indices[i].numpy()) == int(input_indices_tf_next[i].numpy()):
-                same = False
-                break
-        if same:
-            # print("find one same")
-            return 1/base
-        # print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-
-    return 0
-
-
-def my_test(model, data):
-    indices = [0, 1684, 380, 704, 1210, 626, 1373, 34, 175, 1885, 1941, 1169, 642, 434]
-    indices_to_word2(indices, data)
-    masks = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0, 0, 0, 0, 0, 0]
-    # indices = [0, 2, 5, 3]
-    # masks = [1.0, 1.0, 0, 0]
-    input_indices_tf = tf.constant(indices, dtype="int32")
-    input_mask_tf = tf.constant(masks, dtype="float32")
-    K = 3
-    # q = beam_search_pq(model, data, input_indices_tf, input_mask_tf, K)
-    # while not q.empty():
-    #     print(q.get())
-    # for indices, masks in data.batcher(data.train_data, is_training=False):
-    #     index = indices[5,:]
-    #     mask = masks[5,:]
-    #     print(index)
-    #     print(mask)
-    #     break
-    test_data_size = 1
-    test_count = 0
-    test_socre = 0
-
-    [indicess, maskss] = generate_indices_masks(data, test_data_size)
-    for i in range(test_data_size):
-        print(i)
-        masks = maskss[i]
-        indices = indicess[i]
-        # print(indices)
-        # print(masks)
-        # indices_to_word(indices, data)
-        [index, mask] = process_data(data, indices, masks)
-        ll = len(index)
-        # ll - 5
-        for j in range(3, ll - 5):
-            ii = index[j].copy()
-            mm = mask[j].copy()
-            test_count = test_count + 1;
-            zero_to_add = len(index[j + 1]) - len(index[j]) + 5
-            # add 5 because we need some extra room but not too much
-            ii.extend([0] * zero_to_add)
-            mm.extend([0.0] * zero_to_add)
-            input_indices_tf = tf.constant(ii, dtype="int32")
-            input_mask_tf = tf.constant(mm, dtype="float32")
-            # print(ii)
-            pq = beam_search_pq(model, data, input_indices_tf, input_mask_tf, K)
-            test_socre = test_socre + get_score(pq, tf.constant(index[j + 1], dtype="int32"), tf.constant(mask[j + 1], dtype="float32"), K, data)
-        MPR = test_socre / test_count
-        print(MPR)
-    MPR = test_socre/test_count
-    print(MPR)
-
-
 def eval(model, data):
     mbs = 0
     count = 0
@@ -464,6 +118,232 @@ def train(model, data):
                                                                                           2, entropy)))
 
 
+def index_to_word(index, data):
+    word = data.i2w[index.numpy()]
+    return word
+
+
+def indices_to_word(indices, data):
+    words = []
+    for index in indices:
+        words.append(data.i2w[index.numpy()])
+    print("!!!!!!!!!!!Print word given indices!!!!!!!!!!")
+    print(words)
+    return words
+
+
+def indices_to_word2(indices, data):
+    words = []
+    for index in indices:
+        words.append(data.i2w[index])
+    print("!!!!!!!!!!!Print word given indices!!!!!!!!!!")
+    print(words)
+    return words
+
+
+# find the top K prediction form preds, which is generated by model(input_indices)
+def generate_K_indices_pq(preds, input_masks, data, K):
+    listA = preds.shape.as_list()
+    indices_result = np.zeros((listA[0] * K, listA[1]))
+    logits = np.zeros(K)
+    probabilities = np.zeros(K)
+    index_to_expand = tf.reduce_sum(input_masks[0, :])
+
+    for i in range((listA[0])):
+        # directly go to to the last word of prediction as this is the only word we care about
+        for j in range(index_to_expand - 1, index_to_expand):
+            # get probability from logits
+            prediction = tf.nn.softmax(preds[i, j, :])
+
+            (logits, topK_logits_index) = tf.math.top_k(preds[i, j, :], K)
+            for k in range(K):
+                indices_result[i + k * listA[0], j] = topK_logits_index[k]
+                probabilities[k] = prediction[topK_logits_index[k]]
+
+    return tf.constant(indices_result, dtype="int32"), logits, probabilities, index_to_expand
+
+
+def beam_search_pq(model, data, input_indices_tf, input_mask_tf, K):
+    suffix = "#"
+    min_heap_result = Q.PriorityQueue()
+    max_heap_candidate = Q.PriorityQueue()
+    # add dummy threshold node
+    min_heap_result.put((0.00001, input_indices_tf, input_mask_tf))
+    # unique count
+    count = 0
+
+    # initialize the max_heap_candidate by pushing the first K top prediction of input indices
+    index_tf = input_indices_tf[:-1]
+    expand_index_tf = tf.expand_dims(index_tf, 0)
+    expand_mask_tf = tf.expand_dims(input_mask_tf, 0)
+    preds = model(expand_index_tf)
+    (k_indices_tf, logits, probabilities, index_to_expand) = generate_K_indices_pq(preds, expand_mask_tf, data, K)
+    for i in range(K):
+        new_index_tf = tf.Variable(input_indices_tf)
+        new_index_tf = new_index_tf[int(index_to_expand.numpy())].assign(k_indices_tf[i, int(index_to_expand.numpy() - 1)])
+        new_mask_tf = tf.Variable(input_mask_tf)
+        new_mask_tf = new_mask_tf[int(index_to_expand.numpy())].assign(tf.constant(1.0, dtype="float32"))
+        # add unique count
+        count = count + 1
+        # push minus probability as we want a max heap
+        max_heap_candidate.put((-probabilities[i], count, (index_to_expand, new_index_tf, new_mask_tf)))
+
+
+    while not max_heap_candidate.empty():
+        max_heap_candidate_top = max_heap_candidate.get()
+        probability = -max_heap_candidate_top[0]
+        indices = max_heap_candidate_top[2][1]
+        mask = max_heap_candidate_top[2][2]
+        index_to_expand = max_heap_candidate_top[2][0]
+
+        # if cur word is not an end of token
+        if (index_to_word(indices[int(index_to_expand.numpy())], data)).endswith(suffix):
+            listA = indices.shape.as_list()
+            # if already reach end, i.e. no more space for additional search,
+            # directly push the not end token to result pq
+            if int(index_to_expand.numpy()) == listA[0] - 1:
+                min_heap_result.put((probability, indices, mask))
+                # keep result size less than or equal to K
+                if min_heap_result.qsize() > K:
+                    min_heap_result.get()
+            # keep searching
+            else:
+                min_heap_result_top = min_heap_result.get()
+                min_heap_result.put(min_heap_result_top)
+                # only search on beams that have higher probability than a threshold,
+                # which is the min probability of cur results
+                if min_heap_result_top[0] < probability:
+                    index_tf = indices[:-1]
+                    input_mask_tf = mask
+                    expand_index_tf = tf.expand_dims(index_tf, 0)
+                    expand_mask_tf = tf.expand_dims(input_mask_tf, 0)
+                    preds = model(expand_index_tf)
+                    (k_indices_tf, logits, probabilities, index_to_expand) = generate_K_indices_pq(preds,
+                                                                                                       expand_mask_tf,
+                                                                                                       data, K)
+                    for i in range(K):
+                        new_index_tf = tf.Variable(indices)
+                        new_index_tf = new_index_tf[int(index_to_expand.numpy())].assign(
+                            k_indices_tf[i, int(index_to_expand.numpy() - 1)])
+                        new_mask_tf = tf.Variable(input_mask_tf)
+                        new_mask_tf = new_mask_tf[int(index_to_expand.numpy())].assign(
+                            tf.constant(1.0, dtype="float32"))
+                        # add unique count
+                        count = count + 1
+                        max_heap_candidate.put(
+                            (-(probability * probabilities[i]), count, (index_to_expand, new_index_tf, new_mask_tf)))
+                else:
+                    break
+        else:
+            min_heap_result.put((probability, indices, mask))
+            # keep result size less than or equal to K
+            if min_heap_result.qsize() > K:
+                min_heap_result.get()
+    return min_heap_result
+
+
+# generate list of size of word sequence and mask by using validation batch data
+def generate_indices_masks(data, size, random_seed):
+    masks_result = []
+    indices_result = []
+
+    # pass in a random seed to shuffle data so that get same data every time
+    random.Random(random_seed).shuffle(data.valid_data)
+
+    # IMPORTANT: grab the target number of word sequence from the first batch of validation batch data,
+    # will cause error if the input word sequence size is larger than the actual first validation batch size
+    # the reason is that I try to reuse the code as much as possible
+    for indices, masks in data.batcher(data.valid_data, is_training=False):
+        indices_result.extend(indices[:size, :])
+        masks_result.extend(masks[:size, :])
+        break
+    return indices_result, masks_result
+
+
+# generate measure positions for MRR in a given word sequence
+def generate_measure_positions(data, indices, mask):
+    indices_result = []
+    masks_result = []
+    cur_indices = []
+    cur_mask = []
+
+    for i in range(201):
+        if mask[i].numpy() == 0:
+            break
+
+        # every time iterate to a new word, add it to the end of cur_indices
+        cur_indices.append(int(indices[i].numpy()))
+        cur_mask.append(float(mask[i].numpy()))
+
+        # if cur word is an end of token, i.e. not ending with '#', append the cur_indices to result list
+        if not data.i2w[int(indices[i].numpy())].endswith("#"):
+            indices_result.append(cur_indices.copy())
+            masks_result.append(cur_mask.copy())
+
+    return indices_result, masks_result
+
+
+# get the MRR score for a priority queue of beam search reseult from a measuring position,
+def get_score(pq, input_indices_tf_next, input_mask_tf_next, K, data):
+    base = K + 1
+    while not pq.empty():
+        base = base - 1
+        [probability, indices, masks] = pq.get()
+        listA = input_indices_tf_next.shape.as_list()
+        same = True
+        for i in range(listA[0]):
+            # if find a mismatch, break the inner loop
+            if not int(indices[i].numpy()) == int(input_indices_tf_next[i].numpy()):
+                same = False
+                break
+        # if find one exactly same, direectly return
+        if same:
+            return 1 / base
+    return 0
+
+
+def measure_MRR(model, data, beam_search_size_K, sequences_to_measure, random_seed):
+    K = beam_search_size_K
+
+    measure_count = 0
+    total_measure_score = 0
+
+    # generate a list of word index sequence and a list of correspondent mask with size(sequences_to_measure)
+    [indices_list, masks_list] = generate_indices_masks(data, sequences_to_measure, random_seed)
+
+    for i in range(sequences_to_measure):
+        masks_i = masks_list[i]
+        indices_i = indices_list[i]
+        # generate measure positions from a sequence
+        [indices, masks] = generate_measure_positions(data, indices_i, masks_i)
+
+        # remain some space at head and tail, mainly to avoid out of boundary error
+        for j in range(3, len(indices) - 5):
+            cur_indices = indices[j].copy()
+            cur_masks = masks[j].copy()
+            measure_count = measure_count + 1
+
+            # patching zero with target token size (in word) at the end of input_indices to beam search,
+            # add 5 extra because we need some overhead for beam search;
+            # however, any prediction use the extra 5 word space will not match target token as they are longer
+            zero_to_add = len(indices[j + 1]) - len(indices[j]) + 5
+            cur_indices.extend([0] * zero_to_add)
+            cur_masks.extend([0.0] * zero_to_add)
+
+            input_indices_tf = tf.constant(cur_indices, dtype="int32")
+            input_mask_tf = tf.constant(cur_masks, dtype="float32")
+            pq = beam_search_pq(model, data, input_indices_tf, input_mask_tf, K)
+            total_measure_score = total_measure_score + get_score(pq, tf.constant(indices[j + 1], dtype="int32"),
+                                                tf.constant(masks[j + 1], dtype="float32"), K, data)
+        MRR = total_measure_score / measure_count
+        print("currently measure sequence:")
+        print(i)
+        print("accumulative MRR:")
+        print(MRR)
+    MRR = total_measure_score / measure_count
+    return MRR
+
+
 def main():
     # Extract arguments
     ap = argparse.ArgumentParser()
@@ -476,25 +356,26 @@ def main():
     model = WordModel(config["model"]["embed_dim"], config["model"]["hidden_dim"], config["model"]["num_layers"],
                       data.vocab_dim)
 
+
+    ########## SAVE TRAINED MODEL AND DATA ##########
     # random.shuffle(data.valid_data)  # Shuffle just once
     # train(model, data)
-    # # model.save_weights('test_model')
     # model.save_weights('test_model_2')
-    # # f = open('store.pckl', 'wb')
     # f = open('store_2.pckl', 'wb')
     # pickle.dump(data, f)
     # f.close()
 
+    ########## LOAD TRAINED MODEL AND DATA ##########
+    # the currently loaded data following is a 10 epoch trained data
     f = open('store_1.pckl', 'rb')
     data = pickle.load(f)
     f.close()
     model.load_weights(os.path.join(os.sep, "home", "program", "code", "test_model_1"))
-    my_test(model, data)
 
-    # entropy, count = eval(model, data)
-    # print("Validation: tokens: {0}, entropy: {1:.3f}, perplexity: {2:.3f}".format(count, entropy,
-    #                                                                               0.0 if entropy > 100 else math.pow(2,
-    #                                                                                                                  entropy)))
+    beam_search_size_K = 10
+    sequences_to_measure = 1
+    random_seed = 1032
+    measure_MRR(model, data, beam_search_size_K, sequences_to_measure, random_seed)
 
     print("Everything Done")
 
