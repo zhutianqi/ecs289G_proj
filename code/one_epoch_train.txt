@@ -1,0 +1,36 @@
+Using configuration: {'training': {'print_freq': 25, 'num_epochs': 1, 'lr': 0.001}, 'model': {'num_layers': 2, 'embed_dim': 1000, 'hidden_dim': 500}, 'data': {'batch_size': 50000, 'words_per_sequence': 200}, 'words': {'vocab_cutoff': 0}}
+2066 vocabulary
+12928 lines
+35383777 words
+Epoch: 1
+MB: 25: words: 1171868, entropy: 8.761
+MB: 50: words: 2331263, entropy: 8.238
+MB: 75: words: 3500180, entropy: 8.150
+MB: 100: words: 4686479, entropy: 8.056
+MB: 125: words: 5854707, entropy: 7.844
+MB: 150: words: 7083267, entropy: 7.397
+MB: 175: words: 8303230, entropy: 7.019
+MB: 200: words: 9539277, entropy: 5.825
+MB: 225: words: 10740506, entropy: 5.998
+MB: 250: words: 11942591, entropy: 6.738
+MB: 275: words: 13157809, entropy: 6.424
+MB: 300: words: 14378443, entropy: 6.031
+MB: 325: words: 15583723, entropy: 6.100
+MB: 350: words: 16802281, entropy: 5.469
+MB: 375: words: 18016851, entropy: 5.183
+MB: 400: words: 19237654, entropy: 4.735
+MB: 425: words: 20447364, entropy: 4.843
+MB: 450: words: 21664037, entropy: 4.112
+MB: 475: words: 22879878, entropy: 3.937
+MB: 500: words: 24103423, entropy: 3.609
+MB: 525: words: 25310189, entropy: 3.755
+MB: 550: words: 26517335, entropy: 3.372
+MB: 575: words: 27687776, entropy: 4.358
+MB: 600: words: 28842268, entropy: 4.320
+MB: 625: words: 30049091, entropy: 4.201
+MB: 650: words: 31226453, entropy: 4.487
+MB: 675: words: 32415428, entropy: 4.572
+MB: 700: words: 33645600, entropy: 3.141
+MB: 725: words: 34842350, entropy: 3.401
+Validation: tokens: 9050980, entropy: 4.666, perplexity: 25.381
+Everything Done
