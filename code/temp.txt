@@ -1,9 +1,9 @@
-Using configuration: {'training': {'num_epochs': 3, 'print_freq': 25, 'lr': 0.001}, 'model': {'embed_dim': 1000, 'hidden_dim': 500, 'num_layers': 2}, 'data': {'words_per_sequence': 200, 'batch_size': 50000}, 'words': {'vocab_cutoff': 0}}
+Using configuration: {'model': {'embed_dim': 1000, 'hidden_dim': 500, 'num_layers': 2}, 'training': {'lr': 0.001, 'num_epochs': 3, 'print_freq': 25}, 'data': {'words_per_sequence': 200, 'batch_size': 50000}, 'words': {'vocab_cutoff': 0}}
 2066 vocabulary
 12928 lines
 35383777 words
 currently measure sequence:
 0
 accumulative MRR:
-0.4761316872427984
+0.5267489711934157
 Everything Done

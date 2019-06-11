@@ -357,25 +357,28 @@ def main():
                       data.vocab_dim)
 
 
-    ########## SAVE TRAINED MODEL AND DATA ##########
-    # random.shuffle(data.valid_data)  # Shuffle just once
-    # train(model, data)
-    # model.save_weights('test_model_2')
-    # f = open('store_2.pckl', 'wb')
-    # pickle.dump(data, f)
-    # f.close()
+    test = True
+    if test:
+        ########## LOAD TRAINED MODEL AND DATA ##########
+        # the currently loaded data following is a 10 epoch trained data
+        f = open('store_1.pckl', 'rb')
+        data = pickle.load(f)
+        f.close()
+        model.load_weights(os.path.join(os.sep, "home", "program", "code", "test_model_1"))
 
-    ########## LOAD TRAINED MODEL AND DATA ##########
-    # the currently loaded data following is a 10 epoch trained data
-    f = open('store_1.pckl', 'rb')
-    data = pickle.load(f)
-    f.close()
-    model.load_weights(os.path.join(os.sep, "home", "program", "code", "test_model_1"))
-
-    beam_search_size_K = 10
-    sequences_to_measure = 1
-    random_seed = 1032
-    measure_MRR(model, data, beam_search_size_K, sequences_to_measure, random_seed)
+        beam_search_size_K = 3
+        sequences_to_measure = 1
+        random_seed = 1032
+        measure_MRR(model, data, beam_search_size_K, sequences_to_measure, random_seed)
+    else:
+        # ######### SAVE TRAINED MODEL AND DATA ##########
+        # the data and model is save to given file
+        random.shuffle(data.valid_data)  # Shuffle just once
+        train(model, data)
+        model.save_weights('test_model_2')
+        f = open('store_2.pckl', 'wb')
+        pickle.dump(data, f)
+        f.close()
 
     print("Everything Done")
 
