@@ -21,8 +21,7 @@ Change directory to your destination direcoty in docker
 cd [your destination direcoty in docker]
 ```
 
-Run the model.py, the current setting will generate MRR score of a predefined test with saved model and data. The output is teed into temp.txt
-To change to train mode, modify the test flag in main function of model.py. To test with different beam size or test number, change parameters in main function also
+Run the model.py, the current setting will generate MRR score of a predefined test with saved model and data. The output is saved into temp.txt. To change to train mode, modify the test flag in main function of model.py. To test with different beam size or different  test sequence number, change the parameters in main function also
 ```
 python -u model.py ../data/Train-BPE-txt -v ../data/Valid-BPE-txt | tee temp.txt
 ```
